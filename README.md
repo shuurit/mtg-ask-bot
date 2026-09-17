@@ -17,15 +17,47 @@ AI directly, so there's no separate LLM API key to manage or pay for.
 4. It immediately returns a **deferred** response (Discord shows "Bot is
    thinking..."), because Discord requires an initial response within 3
    seconds and an LLM call is usually slower than that.
-5. In the background (`ctx.waitUntil`), it calls Workers AI with the
-   question, using a system prompt that answers in Tonk Tonk's own
-   goblin-merchant voice (same persona `archidekt-trading-app` already
-   uses for trade messages) while still telling it to say when it's not
-   confident rather than guess -- the character is flavor, the MTG
-   content underneath still has to be right.
+5. In the background (`ctx.waitUntil`), it pulls a compact live snapshot
+   of `mtg-pod-validator`'s playgroup data (see below), then calls Workers
+   AI with the question plus that context, using a system prompt that
+   answers in Tonk Tonk's own goblin-merchant voice (same persona
+   `archidekt-trading-app` already uses for trade messages) while still
+   telling it to say when it's not confident rather than guess -- the
+   character is flavor, the MTG content underneath still has to be right.
 6. It then `PATCH`es the deferred message with the real answer (via
    Discord's follow-up webhook endpoint), truncated to fit Discord's
    2000-character message cap if needed.
+
+## Playgroup stats (mtg-pod-validator's D1 database)
+
+`/ask` also has read-only access to `mtg-pod-validator`'s D1 database
+(same Cloudflare account, bound directly -- see `getPlaygroupContext` in
+`worker.js`), so it can answer questions about the playgroup itself, not
+just general MTG rules -- e.g. "who's winning right now" or "what decks
+does \<player\> play." Every question gets a compact snapshot (per-player
+win/loss record, active decks with baseline power) added to the model's
+context; it's told to only use that data when the question is actually
+about the playgroup, and never invent stats beyond what's given.
+
+Two deliberate boundaries here, both because this reads live production
+data other people's app depends on:
+
+- **Only `mtg-pod-validator`'s database, not `archidekt-trading-app`'s.**
+  The trading app's D1 database has encrypted session cookies, OAuth
+  tokens, and an explicit "mark this want private" feature -- exposing any
+  of that to an LLM answering public Discord messages isn't a risk worth
+  taking casually. `mtg-pod-validator`'s data (players, decks, games) has
+  no such concern.
+- **A simplified win/loss count, not the app's real ranking formula.**
+  `mtg-pod-validator` computes a "Player Adjusted Win Rate" (deck-strength-
+  and pod-size-adjusted) that's deliberately kept in exactly one place
+  (`computePlayerAdjustedWinRate` in `cloudflare-worker/relay.js`) so the
+  app, the Discord reports, and achievements never disagree with each
+  other. Re-deriving that formula a second time here would risk it
+  drifting out of sync, so `/ask` only ever reports raw wins/games played
+  instead -- close enough for a casual "who's doing well" answer, but
+  it'll never match the app's own numbers exactly, and the system prompt
+  is told to be clear about that if it matters to the question.
 
 ## Reusing Tonk Tonk instead of a new Discord Application
 
@@ -70,6 +102,9 @@ previously wired for slash commands:
   paths). `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC_KEY` are plain vars,
   safe to commit -- the sensitive credentials (`DISCORD_BOT_TOKEN`,
   `REGISTER_SECRET`) are never in this file, only set as Worker secrets.
+  Also has the `DB` binding to `mtg-pod-validator`'s existing D1 database
+  (see "Playgroup stats" above) -- no separate database or setup needed,
+  it's the same Cloudflare account.
 
 ## Setup
 

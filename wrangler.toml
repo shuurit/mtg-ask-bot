@@ -11,6 +11,16 @@ account_id = "8ca62cd3d17495e04f67d67caa28e0a8"
 [ai]
 binding = "MTGAI"
 
+# Read-only access to mtg-pod-validator's existing D1 database (same
+# Cloudflare account, so no separate database or data copy needed).
+# getPlaygroupContext in worker.js only ever SELECTs. See its comment for
+# why this binds D1 directly instead of going through that repo's relay
+# Worker API.
+[[d1_databases]]
+binding = "DB"
+database_name = "mtg-pod-validator-db"
+database_id = "033e3773-25f9-4f6a-ba86-9cb8bbcc5b8e"
+
 [vars]
 # Tonk Tonk's existing Application ID (see archidekt-trading-app) -- reused
 # rather than creating a new Discord Application. See README.md.

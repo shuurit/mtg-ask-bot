@@ -114,6 +114,61 @@ async function verifyDiscordRequest(rawBody, signature, timestamp, publicKeyHex)
   }
 }
 
+// Read-only playgroup context from mtg-pod-validator's D1 database (same
+// Cloudflare account, bound directly rather than going through that
+// repo's relay Worker -- its API gates every read behind a Discord
+// session or a separate internal-key secret, and extending that allowlist
+// would mean touching a different, already-deployed production Worker's
+// access control for this). Deliberately a simple raw win/loss count, NOT
+// the app's Player Adjusted Win Rate formula (see computePlayerAdjustedWinRate
+// in mtg-pod-validator/cloudflare-worker/relay.js) -- that formula is
+// meant to live in exactly one place, and re-deriving it here would risk
+// drifting from it. Only ever SELECTs, and only non-sensitive columns
+// (player/deck names, power, win/loss counts) -- never playgroup_user_id
+// or discord_user_id.
+async function getPlaygroupContext(env) {
+  try {
+    const [standings, decks] = await Promise.all([
+      env.DB.prepare(`
+        SELECT p.name AS player,
+               COUNT(gr.result) AS games_played,
+               COALESCE(SUM(gr.result), 0) AS wins
+        FROM players p
+        LEFT JOIN game_results gr ON gr.player_id = p.id
+        GROUP BY p.id
+        HAVING games_played > 0
+        ORDER BY (CAST(wins AS REAL) / games_played) DESC
+        LIMIT 15
+      `).all(),
+      env.DB.prepare(`
+        SELECT p.name AS player, d.name AS deck, d.baseline_power
+        FROM decks d
+        JOIN players p ON p.id = d.player_id
+        WHERE d.archived = 0
+        ORDER BY p.name, d.name
+        LIMIT 60
+      `).all(),
+    ]);
+
+    const decksByPlayer = {};
+    for (const row of decks.results) {
+      (decksByPlayer[row.player] ||= []).push(`${row.deck} (power ${row.baseline_power})`);
+    }
+
+    const lines = standings.results.map((row) => {
+      const winPct = ((row.wins / row.games_played) * 100).toFixed(1);
+      const deckList = (decksByPlayer[row.player] || []).join(', ') || 'no active decks on record';
+      return `- ${row.player}: ${row.games_played} games, ${row.wins} wins (${winPct}%) -- decks: ${deckList}`;
+    });
+
+    if (lines.length === 0) return null;
+    return `Live playgroup stats (raw win/loss record from the tracker's database -- NOT the app's adjusted power-level formula):\n${lines.join('\n')}`;
+  } catch (err) {
+    console.error('D1 playgroup context query failed:', err);
+    return null;
+  }
+}
+
 // Runs after the deferred response is already sent, so nothing here can
 // affect Discord's initial 3-second budget. Always resolves -- an AI or
 // network failure still gets turned into a follow-up message rather than
@@ -123,12 +178,19 @@ async function answerAndFollowUp(interaction, question, env) {
 
   let content;
   try {
-    const aiResponse = await env.MTGAI.run(AI_MODEL, {
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: question },
-      ],
-    });
+    const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+
+    const playgroupContext = env.DB ? await getPlaygroupContext(env) : null;
+    if (playgroupContext) {
+      messages.push({
+        role: 'system',
+        content: `${playgroupContext}\n\nUse this data only if the question is actually about the playgroup (standings, players, decks). Ignore it for general Magic rules/strategy questions, and never invent stats that aren't listed here.`,
+      });
+    }
+
+    messages.push({ role: 'user', content: question });
+
+    const aiResponse = await env.MTGAI.run(AI_MODEL, { messages });
     const answer = aiResponse.response?.trim();
     content = answer ? truncateForDiscord(answer) : "I didn't get a usable answer back -- try rephrasing the question.";
   } catch (err) {
