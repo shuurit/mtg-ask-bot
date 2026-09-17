@@ -10,9 +10,10 @@ AI directly, so there's no separate LLM API key to manage or pay for.
 
 1. Someone types `/ask question: <their question>` in the server.
 2. Discord sends that interaction as an HTTP POST to the Worker
-   (`src/index.js`).
+   (`worker.js`).
 3. The Worker verifies the request is really signed by Discord (Ed25519,
-   via the `discord-interactions` package) before doing anything else.
+   via the Workers runtime's built-in Web Crypto -- no npm package needed)
+   before doing anything else.
 4. It immediately returns a **deferred** response (Discord shows "Bot is
    thinking..."), because Discord requires an initial response within 3
    seconds and an LLM call is usually slower than that.
@@ -54,19 +55,26 @@ previously wired for slash commands:
 
 ## Repo layout
 
-- `src/index.js` -- the Worker: signature verification, PING handling,
-  `/ask` command handling, deferred response, Workers AI call, follow-up
-  `PATCH`, error handling if the AI call fails.
-- `register-commands.js` -- one-off local script (`npm run register`) that
-  registers the `/ask` command with Discord. Guild-scoped (instant) if
-  `DISCORD_GUILD_ID` is set, global (up to an hour to propagate) if not.
-- `wrangler.toml` -- Worker config: the `AI` binding for Workers AI, plus
-  `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC_KEY` as plain vars. Both are
-  safe to commit -- the only actually sensitive credential is the bot
-  token, and that never goes into the Worker at all, only into
-  `register-commands.js`'s local `.env`.
+- `worker.js` -- the whole Worker, one file, zero npm dependencies:
+  signature verification, PING handling, `/ask` command handling, deferred
+  response, Workers AI call, follow-up `PATCH`, error handling if the AI
+  call fails, and a `GET /register` route for the one-time command
+  registration step (see Setup). No dependencies means the whole file can
+  be pasted straight into the Cloudflare dashboard's Worker editor --
+  same deploy method `archidekt-trading-app`'s Cloudflare Worker and
+  `mtg-pod-validator`'s `cloudflare-worker/relay.js` both use.
+- `wrangler.toml` -- Worker config, only needed if you deploy with the
+  `wrangler` CLI instead of the dashboard (see Setup below for both
+  paths). `DISCORD_APPLICATION_ID` and `DISCORD_PUBLIC_KEY` are plain vars,
+  safe to commit -- the sensitive credentials (`DISCORD_BOT_TOKEN`,
+  `REGISTER_SECRET`) are never in this file, only set as Worker secrets.
 
 ## Setup
+
+Everything below is doable from a browser -- Cloudflare dashboard and
+Discord Developer Portal -- no terminal, no `npm`/`wrangler` CLI required.
+(If you do have a terminal later, `wrangler.toml` plus `npm run deploy` /
+`wrangler secret put` is a drop-in alternative to steps 2-3 below.)
 
 ### 1. Re-invite Tonk Tonk with the `applications.commands` scope
 
@@ -78,88 +86,82 @@ URL and go through the invite flow again for the same server. This adds
 the missing scope without removing or resetting anything about the bot's
 existing membership, roles, or permissions there.
 
-### 2. Deploy the Worker
+### 2. Create the Worker in the Cloudflare dashboard
 
-```bash
-npm install
-npx wrangler login
-```
+1. [dash.cloudflare.com](https://dash.cloudflare.com) -> **Workers &
+   Pages** -> **Create** -> **Worker** -> name it (e.g. `mtg-ask-bot`) ->
+   **Deploy** (this creates a placeholder "Hello World" Worker).
+2. **Edit code** -> select everything in the editor, delete it, paste in
+   the full contents of `worker.js` from this repo -> **Save and Deploy**.
+3. **Settings -> Variables and Secrets** -> add these as **Text**
+   variables:
+   - `DISCORD_APPLICATION_ID` = `1537979428133670962` (Tonk Tonk's
+     Application ID)
+   - `DISCORD_PUBLIC_KEY` = Developer Portal -> Tonk Tonk -> **General
+     Information** -> **Public Key** (never generated/copied before now,
+     since nothing needed it until this)
+   - `DISCORD_GUILD_ID` (optional) = the playgroup server's ID (enable
+     Developer Mode in Discord's settings, then right-click the server
+     icon -> Copy Server ID). Set this while testing, for instant
+     registration; remove it later to register the command globally
+     instead (takes up to an hour to propagate).
 
-Fill in `wrangler.toml`:
-
-- `account_id` -- Cloudflare dashboard sidebar, or `npx wrangler whoami`.
-- `DISCORD_APPLICATION_ID` -- already filled in (`1537979428133670962`,
-  Tonk Tonk's Application ID).
-- `DISCORD_PUBLIC_KEY` -- Developer Portal -> Tonk Tonk -> **General
-  Information** -> **Public Key**. Never generated/copied before now since
-  nothing needed it until this.
-
-```bash
-npm run deploy
-```
-
-Copy the deployed `*.workers.dev` URL from the output.
+   Add these as **Secret** variables (Cloudflare encrypts these; they're
+   never visible again after saving, only replaceable):
+   - `DISCORD_BOT_TOKEN` = Tonk Tonk's existing bot token. If you still
+     have the value you set as `archidekt-trading-app`'s
+     `DISCORD_BOT_TOKEN` secret, reuse it as-is -- using it here doesn't
+     change or invalidate it. If you don't have it saved anywhere
+     (Cloudflare doesn't let you read a secret back once set, in the
+     dashboard or via the CLI), you'll need to reset it (Developer Portal
+     -> Tonk Tonk -> **Bot** -> **Reset Token**) -- but that invalidates
+     the old token everywhere, so you'd also need to update it in
+     `archidekt-trading-app`'s own dashboard secrets (both the main Pages
+     project and its `want-match-cron` worker), or Tonk Tonk's
+     DMs/channel-posting there stops working until you do.
+   - `REGISTER_SECRET` = any password you make up yourself (e.g. generate
+     one at [1Password](https://1password.com/password-generator) or
+     similar). This just gates the registration step below so a stranger
+     who finds the Worker's URL can't re-register a different command.
+4. **Save and Deploy** to apply the variables.
+5. **Settings -> Bindings** -> **Add** -> **Workers AI** -> variable name
+   exactly `AI` -> **Save and Deploy**.
+6. Copy the Worker's `*.workers.dev` URL, shown at the top of the Worker's
+   dashboard page.
 
 ### 3. Set the Interactions Endpoint URL
 
 Developer Portal -> Tonk Tonk -> **General Information** -> **Interactions
-Endpoint URL** -> paste the Worker URL from step 2 -> Save. Discord
-immediately sends a test `PING` to verify it -- if `src/index.js` is
-deployed correctly and `DISCORD_PUBLIC_KEY` is right, this succeeds right
-away. (This field was empty before -- Tonk Tonk never had one set -- so
-this doesn't override anything.)
+Endpoint URL** -> paste the Worker URL from step 2.6 -> Save. Discord
+immediately sends a test `PING` to verify it -- if `worker.js` is deployed
+correctly and `DISCORD_PUBLIC_KEY` is right, this succeeds right away.
+(This field was empty before -- Tonk Tonk never had one set -- so this
+doesn't override anything.)
 
 ### 4. Register the `/ask` command
 
-```bash
-cp .env.example .env
+Visit this URL in your browser once (substitute your actual Worker URL
+and the `REGISTER_SECRET` you picked in step 2.3):
+
+```
+https://mtg-ask-bot.<your-subdomain>.workers.dev/register?key=<REGISTER_SECRET>
 ```
 
-Fill in `.env`:
-
-- `DISCORD_APPLICATION_ID` -- same as `wrangler.toml`
-  (`1537979428133670962`).
-- `DISCORD_BOT_TOKEN` -- Tonk Tonk's existing bot token. If you still have
-  the value you set as `archidekt-trading-app`'s `DISCORD_BOT_TOKEN`
-  secret, reuse it as-is -- registering a command with it doesn't change
-  or invalidate it. If you don't have it saved anywhere (`wrangler secret
-  put` doesn't let you read a secret back once set), you'll need to reset
-  it (Developer Portal -> Tonk Tonk -> **Bot** -> **Reset Token**) -- but
-  that invalidates the old token everywhere, so you'd also need to update
-  it via `wrangler secret put DISCORD_BOT_TOKEN` in **both**
-  `archidekt-trading-app` (the main Pages project) and its
-  `want-match-cron` worker, or Tonk Tonk's DMs/channel-posting there stops
-  working until you do.
-- `DISCORD_GUILD_ID` (optional) -- the playgroup server's ID (enable
-  Developer Mode in Discord settings, then right-click the server icon ->
-  Copy Server ID). Set this while testing for instant registration; leave
-  it unset once everything works to register the command globally.
-
-```bash
-npm run register
-```
+You should see a page starting with "Registered /ask command...". That's
+it -- no need to visit it again unless the command definition in
+`worker.js` (`ASK_COMMAND`) changes later.
 
 ### 5. Test it
 
 In the playgroup server, type `/ask question: What does deathtouch do?`
 and confirm you get a "Bot is thinking..." followed by a real answer.
 
-### Local development
-
-```bash
-npm run dev
-```
-
-Runs the Worker locally via `wrangler dev`. Testing interactions end to
-end still requires a publicly reachable URL for Discord to POST to (e.g. a
-temporary tunnel pointed at the local dev server), since Discord doesn't
-send interactions to `localhost`.
-
 ## Model
 
-Defaults to `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (set in
-`AI_MODEL` in `src/index.js`). For faster/cheaper responses at some
-quality cost, swap in `@cf/meta/llama-3.1-8b-instruct-fp8`.
+Defaults to `@cf/meta/llama-3.3-70b-instruct-fp8-fast` (set in `AI_MODEL`
+in `worker.js`). For faster/cheaper responses at some quality cost, swap
+in `@cf/meta/llama-3.1-8b-instruct-fp8` (edit `worker.js` in the dashboard
+-> Save and Deploy).
 
 This rides entirely on Cloudflare's free tiers -- Workers' free request
 allowance plus Workers AI's 10,000 free Neurons/day -- which should

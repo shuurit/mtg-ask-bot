@@ -1,7 +1,12 @@
 name = "mtg-ask-bot"
-main = "src/index.js"
+main = "worker.js"
 compatibility_date = "2026-01-01"
 account_id = "your-cloudflare-account-id"
+
+# Only needed if you deploy with the wrangler CLI. Deploying via the
+# Cloudflare dashboard (Workers & Pages -> Create -> paste worker.js) needs
+# none of this file -- set the same values as dashboard vars/secrets
+# instead. See README.md.
 
 [ai]
 binding = "AI"
@@ -11,3 +16,9 @@ binding = "AI"
 # rather than creating a new Discord Application. See README.md.
 DISCORD_APPLICATION_ID = "1537979428133670962"
 DISCORD_PUBLIC_KEY = "your-discord-public-key"
+# Optional: uncomment to register /ask to one server only, for instant testing.
+# DISCORD_GUILD_ID = "your-discord-guild-id"
+
+# DISCORD_BOT_TOKEN and REGISTER_SECRET are secrets, not vars -- never put
+# them here. Set them with `wrangler secret put DISCORD_BOT_TOKEN` (and
+# same for REGISTER_SECRET), or as Secret-type entries in the dashboard.
