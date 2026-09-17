@@ -215,3 +215,16 @@ comfortably cover casual playgroup usage without needing a paid plan.
   in a regular message). That needs Discord's privileged Message Content
   intent, which is a separate decision -- for now, `/ask` is the only way
   to reach the bot.
+
+## Troubleshooting
+
+**Deployed changes don't seem to show up in Discord.** Check the Worker's
+**Deployments** tab in the Cloudflare dashboard for a deployment matching
+the latest commit. If deployments just stop appearing after some point
+with no failed attempts either, the GitHub webhook that triggers builds
+has likely gone missing -- confirmed by checking the repo's GitHub
+**Settings -> Webhooks**: a Cloudflare entry should be listed there, and
+if it isn't, Cloudflare never learns about new pushes at all. Fix: on the
+Worker's **Settings -> Build** page, disconnect and reconnect the GitHub
+repository -- this re-creates the webhook. Push a small commit afterward
+to confirm a new deployment actually appears.
