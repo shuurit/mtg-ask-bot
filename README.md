@@ -125,7 +125,7 @@ existing membership, roles, or permissions there.
      who finds the Worker's URL can't re-register a different command.
 4. **Save and Deploy** to apply the variables.
 5. **Settings -> Bindings** -> **Add** -> **Workers AI** -> variable name
-   exactly `AI` -> **Save and Deploy**.
+   exactly `MTGAI` -> **Save and Deploy**.
 6. Copy the Worker's `*.workers.dev` URL, shown at the top of the Worker's
    dashboard page.
 

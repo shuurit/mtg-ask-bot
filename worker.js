@@ -99,7 +99,7 @@ async function answerAndFollowUp(interaction, question, env) {
 
   let content;
   try {
-    const aiResponse = await env.AI.run(AI_MODEL, {
+    const aiResponse = await env.MTGAI.run(AI_MODEL, {
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: question },

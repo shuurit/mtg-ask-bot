@@ -9,7 +9,7 @@ account_id = "8ca62cd3d17495e04f67d67caa28e0a8"
 # wrangler CLI instead, this file works for that too -- no changes needed.
 
 [ai]
-binding = "AI"
+binding = "MTGAI"
 
 [vars]
 # Tonk Tonk's existing Application ID (see archidekt-trading-app) -- reused
