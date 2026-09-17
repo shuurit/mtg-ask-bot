@@ -4,7 +4,7 @@
   "private": true,
   "description": "Discord /ask slash command for MTG questions, backed by Cloudflare Workers AI -- see README.md",
   "main": "worker.js",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"

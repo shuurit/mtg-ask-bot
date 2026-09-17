@@ -204,7 +204,7 @@ async function handleRegister(request, env) {
   return new Response(message, { status: discordResponse.ok ? 200 : discordResponse.status });
 }
 
-module.exports = {
+export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
