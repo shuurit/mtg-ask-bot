@@ -1,12 +1,12 @@
 name = "mtg-ask-bot"
 main = "worker.js"
 compatibility_date = "2026-01-01"
-account_id = "your-cloudflare-account-id"
+account_id = "8ca62cd3d17495e04f67d67caa28e0a8"
 
-# Only needed if you deploy with the wrangler CLI. Deploying via the
-# Cloudflare dashboard (Workers & Pages -> Create -> paste worker.js) needs
-# none of this file -- set the same values as dashboard vars/secrets
-# instead. See README.md.
+# Cloudflare reads this file directly when deploying from the connected
+# GitHub repo (Workers & Pages -> Create -> Import a Git repository), so
+# it needs real values, not placeholders. If you ever deploy with the
+# wrangler CLI instead, this file works for that too -- no changes needed.
 
 [ai]
 binding = "AI"
