@@ -1,0 +1,11 @@
+name = "mtg-ask-bot"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+account_id = "your-cloudflare-account-id"
+
+[ai]
+binding = "AI"
+
+[vars]
+DISCORD_APPLICATION_ID = "your-discord-application-id"
+DISCORD_PUBLIC_KEY = "your-discord-public-key"

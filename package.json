@@ -1,0 +1,20 @@
+{
+  "name": "mtg-ask-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Discord /ask slash command for MTG questions, backed by Cloudflare Workers AI -- see README.md",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "register": "node register-commands.js"
+  },
+  "dependencies": {
+    "discord-interactions": "^4.4.0",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "wrangler": "^4.120.0"
+  }
+}
