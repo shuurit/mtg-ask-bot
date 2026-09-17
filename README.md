@@ -18,9 +18,11 @@ AI directly, so there's no separate LLM API key to manage or pay for.
    thinking..."), because Discord requires an initial response within 3
    seconds and an LLM call is usually slower than that.
 5. In the background (`ctx.waitUntil`), it calls Workers AI with the
-   question, using a system prompt that frames it as an MTG rules/strategy
-   assistant for a playgroup and tells it to say when it's not confident
-   rather than guess.
+   question, using a system prompt that answers in Tonk Tonk's own
+   goblin-merchant voice (same persona `archidekt-trading-app` already
+   uses for trade messages) while still telling it to say when it's not
+   confident rather than guess -- the character is flavor, the MTG
+   content underneath still has to be right.
 6. It then `PATCH`es the deferred message with the real answer (via
    Discord's follow-up webhook endpoint), truncated to fit Discord's
    2000-character message cap if needed.
