@@ -16,8 +16,10 @@ binding = "MTGAI"
 # rather than creating a new Discord Application. See README.md.
 DISCORD_APPLICATION_ID = "1537979428133670962"
 DISCORD_PUBLIC_KEY = "cdf791369ec1dade12055cc7ec08163f0a4e40c6724c0d845b92c47cd5c22f1c"
-# Optional: uncomment to register /ask to one server only, for instant testing.
-# DISCORD_GUILD_ID = "your-discord-guild-id"
+# Playgroup server ID -- registers /ask to this server only (instant),
+# instead of globally (up to an hour to propagate). Remove this line to
+# switch to global registration once everything works.
+DISCORD_GUILD_ID = "1448929174537637940"
 
 # DISCORD_BOT_TOKEN and REGISTER_SECRET are secrets, not vars -- never put
 # them here. Set them with `wrangler secret put DISCORD_BOT_TOKEN` (and
