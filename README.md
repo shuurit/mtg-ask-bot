@@ -24,19 +24,33 @@ AI directly, so there's no separate LLM API key to manage or pay for.
    Discord's follow-up webhook endpoint), truncated to fit Discord's
    2000-character message cap if needed.
 
-## Why a new Discord Application instead of reusing an existing bot
+## Reusing Tonk Tonk instead of a new Discord Application
 
 The playgroup's other Discord automation (`fnm-poll`,
 `magic-card-of-the-day`) posts entirely through channel **webhooks** --
-there's no Discord Application or bot token behind either of them, just a
-webhook URL each script `POST`s to. A slash command needs an actual
-Application (for its ID/public key, used to verify incoming requests) with
-a bot user (for the token used to register the command) and a configured
-**Interactions Endpoint URL** that Discord POSTs to -- none of that exists
-yet anywhere in the playgroup's setup. So this isn't a case of reusing vs.
-recreating an existing bot; it's creating the first one. One new Discord
-Application, used only for `/ask`, is the natural choice -- see Setup
-below.
+there's no Discord Application behind either of them. But
+`archidekt-trading-app` has one: **Tonk Tonk** (Application ID
+`1537979428133670962`), which already has a bot user (`DISCORD_BOT_TOKEN`,
+used for trade-event DMs and the admin "Post to Discord" tool) and is
+already invited to the shared server. `/ask` reuses that same Application
+instead of creating a new one -- one less bot in the member list, same
+voice/identity.
+
+Two things that setup needs to account for, since Tonk Tonk was never
+previously wired for slash commands:
+
+- **It has no Interactions Endpoint URL configured yet.** Tonk Tonk's
+  existing features (OAuth login, DMs, channel posts) are all outbound
+  REST calls or user-initiated OAuth -- nothing before this needed Discord
+  to POST *to* it. Setting the Interactions Endpoint URL (Setup step 2
+  below) is additive and doesn't touch any of that.
+- **It was invited with only the `bot` scope, not `applications.commands`**
+  (see `archidekt-trading-app/cloudflare-worker/README.md`). A slash
+  command won't register into a guild the bot doesn't have that scope in,
+  so re-inviting with both scopes (Setup step 1 below) is required even
+  though the bot is already in the server -- this is additive too, it
+  doesn't remove or reset anything about the bot's existing membership or
+  permissions.
 
 ## Repo layout
 
@@ -54,20 +68,15 @@ below.
 
 ## Setup
 
-### 1. Create the Discord Application
+### 1. Re-invite Tonk Tonk with the `applications.commands` scope
 
-1. [Discord Developer Portal](https://discord.com/developers/applications)
-   -> **New Application** -> name it (e.g. "MTG Ask Bot").
-2. **General Information** tab -> copy the **Application ID** and
-   **Public Key** -- these go into `wrangler.toml`.
-3. **Bot** tab -> **Reset Token** -> copy the token -- this goes into
-   `.env` (step 3 below), never into `wrangler.toml` or anywhere committed.
-   Treat it as a secret: regenerate it immediately if it's ever exposed.
-4. **OAuth2 -> URL Generator** -> scopes: `bot` and `applications.commands`
-   -> no bot permissions are needed beyond the default (the bot only
-   responds to the slash command, it doesn't need to send messages any
-   other way) -> open the generated URL and invite it to the playgroup
-   server.
+[Discord Developer Portal](https://discord.com/developers/applications) ->
+Tonk Tonk -> **OAuth2 -> URL Generator** -> scopes: `bot` **and**
+`applications.commands` (leave permissions as they already are -- this
+doesn't need anything beyond what's already granted) -> open the generated
+URL and go through the invite flow again for the same server. This adds
+the missing scope without removing or resetting anything about the bot's
+existing membership, roles, or permissions there.
 
 ### 2. Deploy the Worker
 
@@ -79,7 +88,11 @@ npx wrangler login
 Fill in `wrangler.toml`:
 
 - `account_id` -- Cloudflare dashboard sidebar, or `npx wrangler whoami`.
-- `DISCORD_APPLICATION_ID` / `DISCORD_PUBLIC_KEY` -- from step 1.2 above.
+- `DISCORD_APPLICATION_ID` -- already filled in (`1537979428133670962`,
+  Tonk Tonk's Application ID).
+- `DISCORD_PUBLIC_KEY` -- Developer Portal -> Tonk Tonk -> **General
+  Information** -> **Public Key**. Never generated/copied before now since
+  nothing needed it until this.
 
 ```bash
 npm run deploy
@@ -89,10 +102,12 @@ Copy the deployed `*.workers.dev` URL from the output.
 
 ### 3. Set the Interactions Endpoint URL
 
-Discord Developer Portal -> your app -> **General Information** ->
-**Interactions Endpoint URL** -> paste the Worker URL from step 2 -> Save.
-Discord immediately sends a test `PING` to verify it -- if `src/index.js`
-is deployed correctly, this succeeds right away.
+Developer Portal -> Tonk Tonk -> **General Information** -> **Interactions
+Endpoint URL** -> paste the Worker URL from step 2 -> Save. Discord
+immediately sends a test `PING` to verify it -- if `src/index.js` is
+deployed correctly and `DISCORD_PUBLIC_KEY` is right, this succeeds right
+away. (This field was empty before -- Tonk Tonk never had one set -- so
+this doesn't override anything.)
 
 ### 4. Register the `/ask` command
 
@@ -102,8 +117,19 @@ cp .env.example .env
 
 Fill in `.env`:
 
-- `DISCORD_APPLICATION_ID` -- same as `wrangler.toml`.
-- `DISCORD_BOT_TOKEN` -- from step 1.3 above.
+- `DISCORD_APPLICATION_ID` -- same as `wrangler.toml`
+  (`1537979428133670962`).
+- `DISCORD_BOT_TOKEN` -- Tonk Tonk's existing bot token. If you still have
+  the value you set as `archidekt-trading-app`'s `DISCORD_BOT_TOKEN`
+  secret, reuse it as-is -- registering a command with it doesn't change
+  or invalidate it. If you don't have it saved anywhere (`wrangler secret
+  put` doesn't let you read a secret back once set), you'll need to reset
+  it (Developer Portal -> Tonk Tonk -> **Bot** -> **Reset Token**) -- but
+  that invalidates the old token everywhere, so you'd also need to update
+  it via `wrangler secret put DISCORD_BOT_TOKEN` in **both**
+  `archidekt-trading-app` (the main Pages project) and its
+  `want-match-cron` worker, or Tonk Tonk's DMs/channel-posting there stops
+  working until you do.
 - `DISCORD_GUILD_ID` (optional) -- the playgroup server's ID (enable
   Developer Mode in Discord settings, then right-click the server icon ->
   Copy Server ID). Set this while testing for instant registration; leave
