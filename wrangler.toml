@@ -15,7 +15,7 @@ binding = "MTGAI"
 # Tonk Tonk's existing Application ID (see archidekt-trading-app) -- reused
 # rather than creating a new Discord Application. See README.md.
 DISCORD_APPLICATION_ID = "1537979428133670962"
-DISCORD_PUBLIC_KEY = "your-discord-public-key"
+DISCORD_PUBLIC_KEY = "cdf791369ec1dade12055cc7ec08163f0a4e40c6724c0d845b92c47cd5c22f1c"
 # Optional: uncomment to register /ask to one server only, for instant testing.
 # DISCORD_GUILD_ID = "your-discord-guild-id"
 
