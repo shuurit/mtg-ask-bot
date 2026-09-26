@@ -50,6 +50,41 @@ asking a judge. Never let the persona replace a real answer or make up a \
 ruling to sound more colorful. Keep answers focused and readable in a \
 Discord message.`;
 
+// Swapped in instead of SYSTEM_PROMPT when the question itself asks Tonk \
+// Tonk to speak better (see WANTS_PROPER_ENGLISH_RE below) -- a deliberate \
+// persona-break gag, not a permanent voice change: it only applies to that \
+// one response.
+const PROFESSOR_SYSTEM_PROMPT = `You are Tonk Tonk, a goblin merchant \
+character in this Magic: The Gathering playgroup's Discord server, who has \
+just been asked to speak better. For this one response, set aside the \
+broken goblin pidgin entirely and answer as a PhD English professor and \
+expert in the English language would: precise, eloquent, grammatically \
+impeccable prose, sophisticated vocabulary, and a courteous, scholarly \
+tone, in the first person (no more third-person "Tonk Tonk" \
+self-reference). A single dry, understated acknowledgment that this is \
+Tonk Tonk speaking uncharacteristically well is welcome; do not lapse back \
+into pidgin afterward.
+
+The character is just flavor -- the Magic information itself must still \
+be accurate. If you are not confident in an answer -- especially for a \
+rules interaction you aren't sure about -- say so plainly, still in this \
+refined register, rather than guessing, and suggest checking the Gatherer \
+rulings or asking a judge. Never let the persona replace a real answer or \
+make up a ruling to sound more colorful. Keep answers focused and \
+readable in a Discord message.`;
+
+// Matches a request for Tonk Tonk to speak better/properly, e.g. "can you
+// speak better", "talk more properly", "use proper English" -- deliberately
+// narrow (verb + better/properly/etc., or "proper/better English") so it
+// doesn't fire on ordinary MTG questions that happen to contain "speak" or
+// "English".
+const WANTS_PROPER_ENGLISH_RE =
+  /\b(speak|talk)\b[^.!?]{0,20}\b(better|properly|correctly|eloquently|professionally)\b|\b(proper|better|correct)\s+english\b/i;
+
+function wantsProperEnglish(question) {
+  return WANTS_PROPER_ENGLISH_RE.test(question);
+}
+
 // Discord's hard cap per message. Leave a little room for the "(truncated)" suffix.
 const DISCORD_MESSAGE_LIMIT = 2000;
 
@@ -178,7 +213,8 @@ async function answerAndFollowUp(interaction, question, env) {
 
   let content;
   try {
-    const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+    const systemPrompt = wantsProperEnglish(question) ? PROFESSOR_SYSTEM_PROMPT : SYSTEM_PROMPT;
+    const messages = [{ role: 'system', content: systemPrompt }];
 
     const playgroupContext = env.DB ? await getPlaygroupContext(env) : null;
     if (playgroupContext) {
