@@ -24,6 +24,11 @@ AI directly, so there's no separate LLM API key to manage or pay for.
    `archidekt-trading-app` already uses for trade messages) while still
    telling it to say when it's not confident rather than guess -- the
    character is flavor, the MTG content underneath still has to be right.
+   If the question itself asks Tonk Tonk to speak better/properly (see
+   `WANTS_PROPER_ENGLISH_RE` in `worker.js`), that one response swaps in
+   `PROFESSOR_SYSTEM_PROMPT` instead, answering as a PhD English professor
+   and expert in the language rather than in goblin pidgin -- a one-off
+   persona-break gag, not a lasting voice change.
 6. It then `PATCH`es the deferred message with the real answer (via
    Discord's follow-up webhook endpoint), truncated to fit Discord's
    2000-character message cap if needed.
