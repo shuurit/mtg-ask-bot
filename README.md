@@ -44,6 +44,12 @@ win/loss record, active decks with baseline power) added to the model's
 context; it's told to only use that data when the question is actually
 about the playgroup, and never invent stats beyond what's given.
 
+Both queries exclude players with no linked playgroup.gg account
+(`playgroup_user_id IS NULL` -- inactive, never played, test data, etc.),
+the same rule `mtg-pod-validator`'s own `relay.js` endpoints already apply,
+so `/ask` never reports a "standing" for someone who isn't a real tracked
+member.
+
 Two deliberate boundaries here, both because this reads live production
 data other people's app depends on:
 

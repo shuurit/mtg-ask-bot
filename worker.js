@@ -161,6 +161,13 @@ async function verifyDiscordRequest(rawBody, signature, timestamp, publicKeyHex)
 // drifting from it. Only ever SELECTs, and only non-sensitive columns
 // (player/deck names, power, win/loss counts) -- never playgroup_user_id
 // or discord_user_id.
+//
+// Both queries below filter to players.playgroup_user_id IS NOT NULL, the
+// same rule relay.js's own GET /players, /rankings, /games and
+// /deck-win-rates (and gatherAchievementContext) already apply -- a player
+// row with no linked playgroup.gg account is inactive/never-played/test
+// data, so it's excluded the same way there, not surfaced as a real
+// standing here.
 async function getPlaygroupContext(env) {
   try {
     const [standings, decks] = await Promise.all([
@@ -170,6 +177,7 @@ async function getPlaygroupContext(env) {
                COALESCE(SUM(gr.result), 0) AS wins
         FROM players p
         LEFT JOIN game_results gr ON gr.player_id = p.id
+        WHERE p.playgroup_user_id IS NOT NULL
         GROUP BY p.id
         HAVING games_played > 0
         ORDER BY (CAST(wins AS REAL) / games_played) DESC
@@ -179,7 +187,7 @@ async function getPlaygroupContext(env) {
         SELECT p.name AS player, d.name AS deck, d.baseline_power
         FROM decks d
         JOIN players p ON p.id = d.player_id
-        WHERE d.archived = 0
+        WHERE d.archived = 0 AND p.playgroup_user_id IS NOT NULL
         ORDER BY p.name, d.name
         LIMIT 60
       `).all(),
